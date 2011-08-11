@@ -41,214 +41,218 @@
 // ******************************************************************
 class Xbe
 {
-    public:
-        // ******************************************************************
-        // * Construct via Xbe file
-        // ******************************************************************
-        Xbe(const char *x_szFilename);
+public:
+    // ******************************************************************
+    // * Construct via Xbe file
+    // ******************************************************************
+    Xbe(const char *x_szFilename);
 
-        // ******************************************************************
-        // * Deconstructor
-        // ******************************************************************
-       ~Xbe();
+    // ******************************************************************
+    // * Deconstructor
+    // ******************************************************************
+   ~Xbe();
 
-        // ******************************************************************
-        // * Writer
-        // ******************************************************************
-       int32 WriteExe(const char *x_szFilename);
+   // ******************************************************************
+   // * Patcher
+   // ******************************************************************
+   int32 PatchXbe();
 
-        // ******************************************************************
-        // * XBE header
-        // ******************************************************************
-        #include "AlignPrefix1.h"
-        struct Header
+   // ******************************************************************
+   // * Writer
+   // ******************************************************************
+   int32 WriteExe(const char *x_szFilename);
+
+    // ******************************************************************
+    // * XBE header
+    // ******************************************************************
+    #include "AlignPrefix1.h"
+    struct HEADER
+    {
+        uint32 Magic;                        // 0x0000 - magic number [should be "XBEH"]
+        uint08 DigitalSignature[256];        // 0x0004 - digital signature
+        uint32 BaseAddr;                     // 0x0104 - base address
+        uint32 SizeOfHeaders;                // 0x0108 - size of headers
+        uint32 SizeOfImage;                  // 0x010C - size of image
+        uint32 SizeOfImageHeader;            // 0x0110 - size of image header
+        uint32 TimeDate;                     // 0x0114 - timedate stamp
+        uint32 CertificateAddr;              // 0x0118 - certificate address
+        uint32 Sections;                     // 0x011C - number of sections
+        uint32 SectionHeadersAddr;           // 0x0120 - section headers address
+
+        struct INIT_FLAGS                    // 0x0124 - initialization flags
         {
-            uint32 dwMagic;                         // 0x0000 - magic number [should be "XBEH"]
-            uint08 pbDigitalSignature[256];         // 0x0004 - digital signature
-            uint32 dwBaseAddr;                      // 0x0104 - base address
-            uint32 dwSizeOfHeaders;                 // 0x0108 - size of headers
-            uint32 dwSizeOfImage;                   // 0x010C - size of image
-            uint32 dwSizeOfImageHeader;             // 0x0110 - size of image header
-            uint32 dwTimeDate;                      // 0x0114 - timedate stamp
-            uint32 dwCertificateAddr;               // 0x0118 - certificate address
-            uint32 dwSections;                      // 0x011C - number of sections
-            uint32 dwSectionHeadersAddr;            // 0x0120 - section headers address
+            uint32 MountUtilityDrive   : 1;  // mount utility drive flag
+            uint32 FormatUtilityDrive  : 1;  // format utility drive flag
+            uint32 Limit64MB           : 1;  // limit development kit run time memory to 64mb flag
+            uint32 DontSetupHarddisk   : 1;  // don't setup hard disk flag
+            uint32 Unused               : 4; // unused (or unknown)
+            uint32 Unused_b1            : 8; // unused (or unknown)
+            uint32 Unused_b2            : 8; // unused (or unknown)
+            uint32 Unused_b3            : 8; // unused (or unknown)
+        } InitFlags;
 
-            struct InitFlags                        // 0x0124 - initialization flags
-            {
-                uint32 bMountUtilityDrive   : 1;    // mount utility drive flag
-                uint32 bFormatUtilityDrive  : 1;    // format utility drive flag
-                uint32 bLimit64MB           : 1;    // limit development kit run time memory to 64mb flag
-                uint32 bDontSetupHarddisk   : 1;    // don't setup hard disk flag
-                uint32 Unused               : 4;    // unused (or unknown)
-                uint32 Unused_b1            : 8;    // unused (or unknown)
-                uint32 Unused_b2            : 8;    // unused (or unknown)
-                uint32 Unused_b3            : 8;    // unused (or unknown)
-            }
-            dwInitFlags;
+        uint32 EntryAddr;                    // 0x0128 - entry point address
+        uint32 TlsAddr;                      // 0x012C - thread local storage directory address
+        uint32 PeStackCommit;                // 0x0130 - size of stack commit
+        uint32 PeHeapReserve;                // 0x0134 - size of heap reserve
+        uint32 PeHeapCommit;                 // 0x0138 - size of heap commit
+        uint32 PeBaseAddr;                   // 0x013C - original base address
+        uint32 PeSizeOfImage;                // 0x0140 - size of original image
+        uint32 PeChecksum;                   // 0x0144 - original checksum
+        uint32 PeTimeDate;                   // 0x0148 - original timedate stamp
+        uint32 DebugPathnameAddr;            // 0x014C - debug pathname address
+        uint32 DebugFilenameAddr;            // 0x0150 - debug filename address
+        uint32 DebugUnicodeFilenameAddr;     // 0x0154 - debug unicode filename address
+        uint32 KernelImageThunkAddr;         // 0x0158 - kernel image thunk address
+        uint32 NonKernelImportDirAddr;       // 0x015C - non kernel import directory address
+        uint32 LibraryVersions;              // 0x0160 - number of library versions
+        uint32 LibraryVersionsAddr;          // 0x0164 - library versions address
+        uint32 KernelLibraryVersionAddr;     // 0x0168 - kernel library version address
+        uint32 XapiLibraryVersionAddr;       // 0x016C - xapi library version address
+        uint32 LogoBitmapAddr;               // 0x0170 - logo bitmap address
+        uint32 SizeOfLogoBitmap;             // 0x0174 - logo bitmap size
+    }
+    #include "AlignPosfix1.h"
+    Header;
 
-            uint32 dwEntryAddr;                     // 0x0128 - entry point address
-            uint32 dwTLSAddr;                       // 0x012C - thread local storage directory address
-            uint32 dwPeStackCommit;                 // 0x0130 - size of stack commit
-            uint32 dwPeHeapReserve;                 // 0x0134 - size of heap reserve
-            uint32 dwPeHeapCommit;                  // 0x0138 - size of heap commit
-            uint32 dwPeBaseAddr;                    // 0x013C - original base address
-            uint32 dwPeSizeOfImage;                 // 0x0140 - size of original image
-            uint32 dwPeChecksum;                    // 0x0144 - original checksum
-            uint32 dwPeTimeDate;                    // 0x0148 - original timedate stamp
-            uint32 dwDebugPathnameAddr;             // 0x014C - debug pathname address
-            uint32 dwDebugFilenameAddr;             // 0x0150 - debug filename address
-            uint32 dwDebugUnicodeFilenameAddr;      // 0x0154 - debug unicode filename address
-            uint32 dwKernelImageThunkAddr;          // 0x0158 - kernel image thunk address
-            uint32 dwNonKernelImportDirAddr;        // 0x015C - non kernel import directory address
-            uint32 dwLibraryVersions;               // 0x0160 - number of library versions
-            uint32 dwLibraryVersionsAddr;           // 0x0164 - library versions address
-            uint32 dwKernelLibraryVersionAddr;      // 0x0168 - kernel library version address
-            uint32 dwXAPILibraryVersionAddr;        // 0x016C - xapi library version address
-            uint32 dwLogoBitmapAddr;                // 0x0170 - logo bitmap address
-            uint32 dwSizeOfLogoBitmap;              // 0x0174 - logo bitmap size
-        }
-        #include "AlignPosfix1.h"
-        m_Header;
+    // ******************************************************************
+    // * XBE header extra bytes (used to preserve unknown data)
+    // ******************************************************************
+	char *HeaderEx;
+    uint32 HeaderExSize;
 
-        // ******************************************************************
-        // * XBE header extra bytes (used to preserve unknown data)
-        // ******************************************************************
-		char *m_HeaderEx;
-        uint32 m_HeaderExSize;
+    // ******************************************************************
+    // * XBE certificate
+    // ******************************************************************
+    #include "AlignPrefix1.h"
+    struct CERTIFICATE
+    {
+        uint32  Size;                               // 0x0000 - size of certificate
+        uint32  TimeDate;                           // 0x0004 - timedate stamp
+        uint32  TitleId;                            // 0x0008 - title id
+        wchar_t TitleName[40];                      // 0x000C - title name (unicode)
+        uint32  AlternateTitleId[0x10];             // 0x005C - alternate title ids
+        uint32  AllowedMedia;                       // 0x009C - allowed media types
+        uint32  GameRegion;                         // 0x00A0 - game region
+        uint32  GameRatings;                        // 0x00A4 - game ratings
+        uint32  DiskNumber;                         // 0x00A8 - disk number
+        uint32  Version;                            // 0x00AC - version
+        uint08  LanKey[16];                         // 0x00B0 - lan key
+        uint08  SignatureKey[16];                   // 0x00C0 - signature key
+        uint08  TitleAlternateSignatureKey[16][16]; // 0x00D0 - alternate signature keys
+    }
+    #include "AlignPosfix1.h"
+    Certificate;
 
-        // ******************************************************************
-        // * XBE certificate
-        // ******************************************************************
-        #include "AlignPrefix1.h"
-        struct Certificate
+    // ******************************************************************
+    // * XBE section header
+    // ******************************************************************
+    #include "AlignPrefix1.h"
+    struct SECTION_HEADER
+    {
+        struct _FLAGS
         {
-            uint32  dwSize;                               // 0x0000 - size of certificate
-            uint32  dwTimeDate;                           // 0x0004 - timedate stamp
-            uint32  dwTitleId;                            // 0x0008 - title id
-            wchar_t wszTitleName[40];                     // 0x000C - title name (unicode)
-            uint32  dwAlternateTitleId[0x10];             // 0x005C - alternate title ids
-            uint32  dwAllowedMedia;                       // 0x009C - allowed media types
-            uint32  dwGameRegion;                         // 0x00A0 - game region
-            uint32  dwGameRatings;                        // 0x00A4 - game ratings
-            uint32  dwDiskNumber;                         // 0x00A8 - disk number
-            uint32  dwVersion;                            // 0x00AC - version
-            uint08  bzLanKey[16];                         // 0x00B0 - lan key
-            uint08  bzSignatureKey[16];                   // 0x00C0 - signature key
-            uint08  bzTitleAlternateSignatureKey[16][16]; // 0x00D0 - alternate signature keys
+            uint32 Writable        : 1;  // writable flag
+            uint32 Preload         : 1;  // preload flag
+            uint32 Executable      : 1;  // executable flag
+            uint32 InsertedFile    : 1;  // inserted file flag
+            uint32 HeadPageRO      : 1;  // head page read only flag
+            uint32 TailPageRO      : 1;  // tail page read only flag
+            uint32 Unused_a1        : 1; // unused (or unknown)
+            uint32 Unused_a2        : 1; // unused (or unknown)
+            uint32 Unused_b1        : 8; // unused (or unknown)
+            uint32 Unused_b2        : 8; // unused (or unknown)
+            uint32 Unused_b3        : 8; // unused (or unknown)
         }
-        #include "AlignPosfix1.h"
-        m_Certificate;
+        Flags;
 
-        // ******************************************************************
-        // * XBE section header
-        // ******************************************************************
-        #include "AlignPrefix1.h"
-        struct SectionHeader
+        uint32 VirtualAddr;            // virtual address
+        uint32 VirtualSize;            // virtual size
+        uint32 RawAddr;                // file offset to raw data
+        uint32 SizeOfRaw;              // size of raw data
+        uint32 SectionNameAddr;        // section name addr
+        uint32 SectionRefCount;        // section reference count
+        uint32 HeadSharedRefCountAddr; // head shared page reference count address
+        uint32 TailSharedRefCountAddr; // tail shared page reference count address
+        uint08 SectionDigest[20];      // section digest
+    }
+    #include "AlignPosfix1.h"
+    *SectionHeader;
+
+    // ******************************************************************
+    // * XBE library versions
+    // ******************************************************************
+    #include "AlignPrefix1.h"
+    struct LIBRARY_VERSION
+    {
+        char   Name[8];      // library name
+        uint16 MajorVersion; // major version
+        uint16 MinorVersion; // minor version
+        uint16 BuildVersion; // build version
+
+        struct FLAGS
         {
-            struct _Flags
-            {
-                uint32 bWritable        : 1;    // writable flag
-                uint32 bPreload         : 1;    // preload flag
-                uint32 bExecutable      : 1;    // executable flag
-                uint32 bInsertedFile    : 1;    // inserted file flag
-                uint32 bHeadPageRO      : 1;    // head page read only flag
-                uint32 bTailPageRO      : 1;    // tail page read only flag
-                uint32 Unused_a1        : 1;    // unused (or unknown)
-                uint32 Unused_a2        : 1;    // unused (or unknown)
-                uint32 Unused_b1        : 8;    // unused (or unknown)
-                uint32 Unused_b2        : 8;    // unused (or unknown)
-                uint32 Unused_b3        : 8;    // unused (or unknown)
-            }
-            dwFlags;
-
-            uint32 dwVirtualAddr;               // virtual address
-            uint32 dwVirtualSize;               // virtual size
-            uint32 dwRawAddr;                   // file offset to raw data
-            uint32 dwSizeOfRaw;                 // size of raw data
-            uint32 dwSectionNameAddr;           // section name addr
-            uint32 dwSectionRefCount;           // section reference count
-            uint32 dwHeadSharedRefCountAddr;    // head shared page reference count address
-            uint32 dwTailSharedRefCountAddr;    // tail shared page reference count address
-            uint08 bzSectionDigest[20];         // section digest
+            uint16 QFEVersion : 13; // QFE Version
+            uint16 Approved   : 2;  // Approved? (0:no, 1:possibly, 2:yes)
+            uint16 DebugBuild : 1;  // Is this a debug build?
         }
-        #include "AlignPosfix1.h"
-        *m_SectionHeader;
+        Flags;
+    }
+    #include "AlignPosfix1.h"
+    *LibraryVersion, *KernelLibraryVersion, *XapiLibraryVersion;
 
-        // ******************************************************************
-        // * XBE library versions
-        // ******************************************************************
-        #include "AlignPrefix1.h"
-        struct LibraryVersion
-        {
-            char   szName[8];                   // library name
-            uint16 wMajorVersion;               // major version
-            uint16 wMinorVersion;               // minor version
-            uint16 wBuildVersion;               // build version
+    // ******************************************************************
+    // * XBE Thread Local Storage
+    // ******************************************************************
+    #include "AlignPrefix1.h"
+    struct TLS
+    {
+        uint32 DataStartAddr;             // raw start address
+        uint32 DataEndAddr;               // raw end address
+        uint32 TlsIndexAddr;              // tls index  address
+        uint32 TlsCallbackAddr;           // tls callback address
+        uint32 SizeOfZeroFill;            // size of zero fill
+        uint32 Characteristics;           // characteristics
+    }
+    #include "AlignPosfix1.h"
+    *Tls;
 
-            struct Flags
-            {
-                uint16 QFEVersion       : 13;   // QFE Version
-                uint16 Approved         : 2;    // Approved? (0:no, 1:possibly, 2:yes)
-                uint16 bDebugBuild      : 1;    // Is this a debug build?
-            }
-            dwFlags;
-        }
-        #include "AlignPosfix1.h"
-        *m_LibraryVersion, *m_KernelLibraryVersion, *m_XAPILibraryVersion;
+    // ******************************************************************
+    // * XBE section names, each 8 bytes max and null terminated
+    // ******************************************************************
+    char (*SectionName)[9];
 
-        // ******************************************************************
-        // * XBE Thread Local Storage
-        // ******************************************************************
-        #include "AlignPrefix1.h"
-        struct TLS
-        {
-            uint32 dwDataStartAddr;             // raw start address
-            uint32 dwDataEndAddr;               // raw end address
-            uint32 dwTLSIndexAddr;              // tls index  address
-            uint32 dwTLSCallbackAddr;           // tls callback address
-            uint32 dwSizeOfZeroFill;            // size of zero fill
-            uint32 dwCharacteristics;           // characteristics
-        }
-        #include "AlignPosfix1.h"
-        *m_TLS;
+    // ******************************************************************
+    // * XBE sections
+    // ******************************************************************
+    uint08 **Section;
 
-        // ******************************************************************
-        // * XBE section names, each 8 bytes max and null terminated
-        // ******************************************************************
-        char (*m_szSectionName)[9];
+    // ******************************************************************
+    // * XBE original path
+    // ******************************************************************
+    char Path[260];
 
-        // ******************************************************************
-        // * XBE sections
-        // ******************************************************************
-        uint08 **m_bzSection;
+    // ******************************************************************
+    // * XBE ascii title, translated from certificate title
+    // ******************************************************************
+    char AsciiTitle[40];
 
-        // ******************************************************************
-        // * XBE original path
-        // ******************************************************************
-        char m_szPath[260];
+    // ******************************************************************
+    // * GetTlsData
+    // ******************************************************************
+    uint08 *GetTlsData() { if(Tls == 0) return 0; else return GetAddr(Tls->DataStartAddr); }
 
-        // ******************************************************************
-        // * XBE ascii title, translated from certificate title
-        // ******************************************************************
-        char m_szAsciiTitle[40];
+    // ******************************************************************
+    // * GetTlsIndex
+    // ******************************************************************
+    uint32 *GetTlsIndex() { if(Tls == 0) return 0; else return (uint32*)GetAddr(Tls->TlsIndexAddr); }
 
-        // ******************************************************************
-        // * GetTLSData
-        // ******************************************************************
-        uint08 *GetTLSData() { if(m_TLS == 0) return 0; else return GetAddr(m_TLS->dwDataStartAddr); }
-
-        // ******************************************************************
-        // * GetTLSIndex
-        // ******************************************************************
-        uint32 *GetTLSIndex() { if(m_TLS == 0) return 0; else return (uint32*)GetAddr(m_TLS->dwTLSIndexAddr); }
-
-    private:
-        // ******************************************************************
-        // * return a modifiable pointer inside this structure that 
-        // * corresponds to a virtual address
-        // ******************************************************************
-        uint08 *GetAddr(uint32 x_dwVirtualAddress);
+private:
+    // ******************************************************************
+    // * return a modifiable pointer inside this structure that 
+    // * corresponds to a virtual address
+    // ******************************************************************
+    uint08 *GetAddr(uint32 VirtualAddress);
 };
 
 // ******************************************************************
@@ -293,6 +297,6 @@ const uint32 XBEIMAGE_MEDIA_TYPE_MEDIA_MASK          = 0x00FFFFFF;
 // * OpenXDK logo bitmap (used by cxbe by default)
 // ****************************************************************** 
 extern uint08 OpenXDK[];
-extern uint32 dwSizeOfOpenXDK;
+extern uint32 SizeOfOpenXDK;
 
 #endif

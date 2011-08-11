@@ -50,6 +50,12 @@
         exit(1); \
     } while(0)
 
+#define XBE_PATCH_ERROR(str, ...) do \
+    { \
+        printf("\nError in Xbe::PatchExe: " str "\n", __VA_ARGS__); \
+        return 1; \
+    } while(0)
+
 #define XBE_WRITE_ERROR(str, ...) do \
     { \
         printf("\nError in Xbe::WriteExe: " str "\n", __VA_ARGS__); \
@@ -59,23 +65,60 @@
     } while(0)
 
 // ******************************************************************
+// * Signature for MapRegisters patch and the replacing code
+// ******************************************************************
+
+#define PATCH_LENGTH 11
+
+static uint08 PatchSignature[] = 
+    "\xC7\x01\x00\x00\x00\xFD"
+    "\xA1\x04\x18\x00\xFD";
+
+static void __declspec(naked) PatchCode()
+{
+    __asm
+    {
+        mov dword ptr [ecx], 0x84000000
+        xor eax, eax
+        inc eax
+        ret
+        int 3
+    }
+}
+
+// ******************************************************************
+// * Trampoline that will be located at entry point
+// ******************************************************************
+#define TRAMPOLINE_LENGTH 10
+
+static void __declspec(naked) TrampolineCode()
+{
+    __asm
+    {
+        mov edx, 0x000100EC
+        call dword ptr [edx]
+        ret 0x10
+    }
+}
+
+// ******************************************************************
 // * constructor
 // ******************************************************************
-Xbe::Xbe(const char *x_szFilename)
+Xbe::Xbe(const char *Filename)
 {
-    m_HeaderEx             = 0;
-    m_HeaderExSize         = 0;
-    m_SectionHeader        = 0;
-    m_szSectionName        = 0;
-    m_LibraryVersion       = 0;
-    m_KernelLibraryVersion = 0;
-    m_XAPILibraryVersion   = 0;
-    m_TLS                  = 0;
-    m_bzSection            = 0;
+    HeaderEx             = 0;
+    HeaderExSize         = 0;
+    SectionHeader        = 0;
+    SectionName          = 0;
+    LibraryVersion       = 0;
+    KernelLibraryVersion = 0;
+    XapiLibraryVersion   = 0;
+    Tls                  = 0;
+    Section              = 0;
 
     printf("Xbe::Xbe: Opening Xbe file...");
 
-    FILE *XbeFile = fopen(x_szFilename, "rb");
+    FILE *XbeFile = fopen(Filename, "rb");
     if(XbeFile == 0)
         XBE_ERROR("Could not open Xbe file.");
 
@@ -87,15 +130,15 @@ Xbe::Xbe(const char *x_szFilename)
     {
         printf("Xbe::Xbe Storing Xbe Path...");
 
-        strcpy(m_szPath, x_szFilename);
-        int v=0, c=0;
-        while(m_szPath[v] != '\0')
+        strcpy(Path, Filename);
+        int v = 0, c = 0;
+        while(Path[v] != '\0')
         {
-            if(m_szPath[v] == '\\')
-                c = v+1;
+            if(Path[v] == '\\')
+                c = v + 1;
             v++;
         }
-        m_szPath[c] = '\0';
+        Path[c] = '\0';
     }
 
     printf("OK\n");
@@ -106,9 +149,9 @@ Xbe::Xbe(const char *x_szFilename)
     {
         printf("Xbe::Xbe: Reading Image Header...");
 
-        if(fread(&m_Header, sizeof(m_Header), 1, XbeFile) != 1)
+        if(fread(&Header, sizeof(Xbe::HEADER), 1, XbeFile) != 1)
             XBE_ERROR("Unexpected end of file while reading Xbe Image Header");
-        if(m_Header.dwMagic != *(uint32 *)"XBEH")
+        if(Header.Magic != *(uint32 *)"XBEH")
             XBE_ERROR("Invalid magic number in Xbe file");
 
         printf("OK\n");
@@ -117,15 +160,15 @@ Xbe::Xbe(const char *x_szFilename)
     // ******************************************************************
     // * read xbe image header extra bytes
     // ******************************************************************
-    if(m_Header.dwSizeOfHeaders > sizeof(m_Header))
+    if(Header.SizeOfHeaders > sizeof(Xbe::HEADER))
     {
         printf("Xbe::Xbe: Reading Image Header Extra Bytes...");
 
-        uint32 m_HeaderExSize = RoundUp(m_Header.dwSizeOfHeaders, PAGE_SIZE) - sizeof(m_Header);
+        uint32 HeaderExSize = RoundUp(Header.SizeOfHeaders, PAGE_SIZE) - sizeof(Header);
 
-		m_HeaderEx = new char[m_HeaderExSize];
+		HeaderEx = new char[HeaderExSize];
 
-		if(fread(m_HeaderEx, m_HeaderExSize, 1, XbeFile) != 1)
+		if(fread(HeaderEx, HeaderExSize, 1, XbeFile) != 1)
 			XBE_ERROR("Unexpected end of file while reading Xbe Image Header (Ex)");
 
         printf("OK\n");
@@ -137,16 +180,16 @@ Xbe::Xbe(const char *x_szFilename)
     {
         printf("Xbe::Xbe: Reading Certificate...");
 
-        fseek(XbeFile, m_Header.dwCertificateAddr - m_Header.dwBaseAddr, SEEK_SET);
-        if(fread(&m_Certificate, sizeof(m_Certificate), 1, XbeFile) != 1)
+        fseek(XbeFile, Header.CertificateAddr - Header.BaseAddr, SEEK_SET);
+        if(fread(&Certificate, sizeof(Xbe::CERTIFICATE), 1, XbeFile) != 1)
             XBE_ERROR("Unexpected end of file while reading Xbe Certificate");
 
         setlocale(LC_ALL, "English");
-        wcstombs(m_szAsciiTitle, m_Certificate.wszTitleName, 40);
+        wcstombs(AsciiTitle, Certificate.TitleName, 40);
 
         printf("OK\n");
 
-        printf("Xbe::Xbe: Title identified as %s\n", m_szAsciiTitle);
+        printf("Xbe::Xbe: Title identified as %s\n", AsciiTitle);
     }
 
     // ******************************************************************
@@ -155,14 +198,14 @@ Xbe::Xbe(const char *x_szFilename)
     {
         printf("Xbe::Xbe: Reading Section Headers...\n");
 
-        fseek(XbeFile, m_Header.dwSectionHeadersAddr - m_Header.dwBaseAddr, SEEK_SET);
+        fseek(XbeFile, Header.SectionHeadersAddr - Header.BaseAddr, SEEK_SET);
 
-        m_SectionHeader = new SectionHeader[m_Header.dwSections];
-        for(uint32 v=0; v<m_Header.dwSections; v++)
+        SectionHeader = new Xbe::SECTION_HEADER[Header.Sections];
+        for(uint32 v = 0; v < Header.Sections; v++)
         {
             printf("Xbe::Xbe: Reading Section Header 0x%.04X...", v);
 
-            if(fread(&m_SectionHeader[v], sizeof(*m_SectionHeader), 1, XbeFile) != 1)
+            if(fread(&SectionHeader[v], sizeof(Xbe::SECTION_HEADER), 1, XbeFile) != 1)
                 XBE_ERROR("Unexpected end of file while reading Xbe Section Header %d (%Xh)", v, v);
 
             printf("OK\n");
@@ -175,44 +218,44 @@ Xbe::Xbe(const char *x_szFilename)
     {
         printf("Xbe::Xbe: Reading Section Names...\n");
 
-        m_szSectionName = new char[m_Header.dwSections][9];
-        for(uint32 v=0; v<m_Header.dwSections; v++)
+        SectionName = new char[Header.Sections][9];
+        for(uint32 v = 0; v < Header.Sections; v++)
         {
             printf("Xbe::Xbe: Reading Section Name 0x%.04X...", v);
 
-            uint08 *sn = GetAddr(m_SectionHeader[v].dwSectionNameAddr);
+            uint08 *sn = GetAddr(SectionHeader[v].SectionNameAddr);
 
-            memset(m_szSectionName[v], 0, 9);
+            memset(SectionName[v], 0, 9);
 
             if(sn != 0)
             {
-                for(int b=0; b<8; b++)
+                for(int b = 0; b < 8; b++)
                 {
-                    m_szSectionName[v][b] = sn[b];
-                    if(m_szSectionName[v][b] == '\0')
+                    SectionName[v][b] = sn[b];
+                    if(SectionName[v][b] == '\0')
                         break;
                 }
             }
 
-            printf("OK (%s)\n", m_szSectionName[v]);
+            printf("OK (%s)\n", SectionName[v]);
         }
     }
 
     // ******************************************************************
     // * read xbe library versions
     // ******************************************************************
-    if(m_Header.dwLibraryVersionsAddr != 0)
+    if(Header.LibraryVersionsAddr != 0)
     {
         printf("Xbe::Xbe: Reading Library Versions...\n");
 
-        fseek(XbeFile, m_Header.dwLibraryVersionsAddr - m_Header.dwBaseAddr, SEEK_SET);
+        fseek(XbeFile, Header.LibraryVersionsAddr - Header.BaseAddr, SEEK_SET);
 
-        m_LibraryVersion = new LibraryVersion[m_Header.dwLibraryVersions];
-        for(uint32 v=0; v<m_Header.dwLibraryVersions; v++)
+        LibraryVersion = new Xbe::LIBRARY_VERSION[Header.LibraryVersions];
+        for(uint32 v = 0; v < Header.LibraryVersions; v++)
         {
             printf("Xbe::Xbe: Reading Library Version 0x%.04X...", v);
 
-            if(fread(&m_LibraryVersion[v], sizeof(*m_LibraryVersion), 1, XbeFile) != 1)
+            if(fread(&LibraryVersion[v], sizeof(Xbe::LIBRARY_VERSION), 1, XbeFile) != 1)
                 XBE_ERROR("Unexpected end of file while reading Xbe Library Version %d (%Xh)", v, v);
 
             printf("OK\n");
@@ -224,13 +267,13 @@ Xbe::Xbe(const char *x_szFilename)
         {
             printf("Xbe::Xbe: Reading Kernel Library Version...");
 
-            if(m_Header.dwKernelLibraryVersionAddr == 0)
+            if(Header.KernelLibraryVersionAddr == 0)
                 XBE_ERROR("Could not locate kernel library version");
 
-            fseek(XbeFile, m_Header.dwKernelLibraryVersionAddr - m_Header.dwBaseAddr, SEEK_SET);
+            fseek(XbeFile, Header.KernelLibraryVersionAddr - Header.BaseAddr, SEEK_SET);
 
-            m_KernelLibraryVersion = new LibraryVersion;
-            if(fread(m_KernelLibraryVersion, sizeof(*m_LibraryVersion), 1, XbeFile) != 1)
+            KernelLibraryVersion = new Xbe::LIBRARY_VERSION;
+            if(fread(KernelLibraryVersion, sizeof(Xbe::LIBRARY_VERSION), 1, XbeFile) != 1)
                 XBE_ERROR("Unexpected end of file while reading Xbe Kernel Version");
 
             printf("OK\n");
@@ -242,13 +285,13 @@ Xbe::Xbe(const char *x_szFilename)
         {
             printf("Xbe::Xbe: Reading Xapi Library Version...");
 
-            if(m_Header.dwXAPILibraryVersionAddr == 0)
+            if(Header.XapiLibraryVersionAddr == 0)
                 XBE_ERROR("Could not locate Xapi Library Version", true);
 
-            fseek(XbeFile, m_Header.dwXAPILibraryVersionAddr - m_Header.dwBaseAddr, SEEK_SET);
+            fseek(XbeFile, Header.XapiLibraryVersionAddr - Header.BaseAddr, SEEK_SET);
 
-            m_XAPILibraryVersion = new LibraryVersion;
-            if(fread(m_XAPILibraryVersion, sizeof(*m_LibraryVersion), 1, XbeFile) != 1)
+            XapiLibraryVersion = new Xbe::LIBRARY_VERSION;
+            if(fread(XapiLibraryVersion, sizeof(Xbe::LIBRARY_VERSION), 1, XbeFile) != 1)
                 XBE_ERROR("Unexpected end of file while reading Xbe Xapi Version", true);
 
             printf("OK\n");
@@ -261,18 +304,18 @@ Xbe::Xbe(const char *x_szFilename)
     {
         printf("Xbe::Xbe: Reading Sections...\n");
 
-        m_bzSection = new uint08*[m_Header.dwSections];
+        Section = new uint08*[Header.Sections];
 
-        memset(m_bzSection, 0, m_Header.dwSections);
+        memset(Section, 0, Header.Sections);
 
-        for(uint32 v=0; v<m_Header.dwSections; v++)
+        for(uint32 v = 0; v < Header.Sections; v++)
         {
             printf("Xbe::Xbe: Reading Section 0x%.04X...", v);
 
-            uint32 RawSize = m_SectionHeader[v].dwSizeOfRaw;
-            uint32 RawAddr = m_SectionHeader[v].dwRawAddr;
+            uint32 RawSize = SectionHeader[v].SizeOfRaw;
+            uint32 RawAddr = SectionHeader[v].RawAddr;
 
-            m_bzSection[v] = new uint08[RawSize];
+            Section[v] = new uint08[RawSize];
 
             fseek(XbeFile, RawAddr, SEEK_SET);
 
@@ -282,8 +325,8 @@ Xbe::Xbe(const char *x_szFilename)
                 continue;
             }
 
-            if(fread(m_bzSection[v], RawSize, 1, XbeFile) != 1)
-                XBE_ERROR("Unexpected end of file while reading Xbe Section %d (%Xh) (%s)", v, v, m_szSectionName[v]);
+            if(fread(Section[v], RawSize, 1, XbeFile) != 1)
+                XBE_ERROR("Unexpected end of file while reading Xbe Section %d (%Xh) (%s)", v, v, SectionName[v]);
 
             printf("OK\n");
         }
@@ -292,16 +335,16 @@ Xbe::Xbe(const char *x_szFilename)
     // ******************************************************************
     // * read xbe thread local storage
     // ******************************************************************
-    if(m_Header.dwTLSAddr != 0)
+    if(Header.TlsAddr != 0)
     {
         printf("Xbe::Xbe: Reading Thread Local Storage...");
 
-        void *Addr = GetAddr(m_Header.dwTLSAddr);
+        void *Addr = GetAddr(Header.TlsAddr);
         if(Addr == 0)
             XBE_ERROR("Could not locate Thread Local Storage");
 
-        m_TLS = new TLS;
-        memcpy(m_TLS, Addr, sizeof(*m_TLS));
+        Tls = new Xbe::TLS;
+        memcpy(Tls, Addr, sizeof(Xbe::TLS));
 
         printf("OK\n");
     }
@@ -315,186 +358,222 @@ Xbe::Xbe(const char *x_szFilename)
 // ******************************************************************
 Xbe::~Xbe()
 {
-    if(m_bzSection != 0)
+    if(Section != 0)
     {
-        for(uint32 v=0; v<m_Header.dwSections; v++)
-            delete[] m_bzSection[v];
+        for(uint32 v = 0; v < Header.Sections; v++)
+            delete[] Section[v];
 
-        delete[] m_bzSection;
+        delete[] Section;
     }
 
-    delete   m_XAPILibraryVersion;
-    delete   m_KernelLibraryVersion;
-    delete[] m_LibraryVersion;
-    delete   m_TLS;
-    delete[] m_szSectionName;
-    delete[] m_SectionHeader;
-	delete[] m_HeaderEx;
+    delete   XapiLibraryVersion;
+    delete   KernelLibraryVersion;
+    delete[] LibraryVersion;
+    delete   Tls;
+    delete[] SectionName;
+    delete[] SectionHeader;
+	delete[] HeaderEx;
+}
+
+// ******************************************************************
+// * Patcher
+// ******************************************************************
+int32 Xbe::PatchXbe()
+{
+    printf("Xbe::PatchExe Patching MapRegisters in Xbe...");
+
+    // ******************************************************************
+    // * find section with Direct3D code
+    // ******************************************************************
+    uint32 v;
+    for (v = 0; v < Header.Sections; v++)
+        if (strncmp(SectionName[v], "D3D", 9) == 0)
+            break;
+
+    if (v == Header.Sections)
+        XBE_PATCH_ERROR("Could not find D3D section");
+
+    // ******************************************************************
+    // * find patching location in D3D section
+    // ******************************************************************
+    uint32 i;
+    for (i = 0; i < SectionHeader[v].SizeOfRaw - PATCH_LENGTH; i++)
+        if (memcmp(&Section[v][i], PatchSignature, PATCH_LENGTH) == 0)
+            break;
+
+    if (i == SectionHeader[v].SizeOfRaw - PATCH_LENGTH)
+        XBE_PATCH_ERROR("Could not find signature in D3D section");
+
+    // ******************************************************************
+    // * patch MapRegisters
+    // ******************************************************************
+    memcpy(&Section[v][i], &PatchCode, PATCH_LENGTH);
+
+    printf("OK\n");
+
+    return 0;
 }
 
 // ******************************************************************
 // * Writer
 // ******************************************************************
-int32 Xbe::WriteExe(const char *x_szFilename)
+int32 Xbe::WriteExe(const char *Filename)
 {
     printf("Xbe::WriteExe Converting Xbe to Exe...");
+
+    if (PatchXbe() != 0)
+        return 1;
 
     // ******************************************************************
     // * create buffer for "as-loaded" XBE/EXE hybrid
     // ******************************************************************
-    uint08 *ExeBuffer = new uint08[m_Header.dwSizeOfImage];
+    uint08 *ExeBuffer = new uint08[Header.SizeOfImage];
     if (ExeBuffer == 0)
         XBE_WRITE_ERROR("Cannot allocate buffer for Exe");
 
-    memset(ExeBuffer, 0, m_Header.dwSizeOfImage);
+    memset(ExeBuffer, 0, Header.SizeOfImage);
 
     // ******************************************************************
     // * write xbe section headers
     // ******************************************************************
-    memcpy(ExeBuffer + 0, &m_Header, sizeof(Xbe::Header));
-    memcpy(ExeBuffer + m_Header.dwSizeOfImageHeader, m_HeaderEx, m_HeaderExSize);
+    memcpy(ExeBuffer + 0, &Header, sizeof(Xbe::HEADER));
+    memcpy(ExeBuffer + Header.SizeOfImageHeader, HeaderEx, HeaderExSize);
 
     // ******************************************************************
     // * write xbe sections
     // ******************************************************************
-    for (uint32 v=0; v<m_Header.dwSections; v++)
+    for (uint32 v = 0; v < Header.Sections; v++)
     {
-        uint32 offs = m_SectionHeader[v].dwVirtualAddr - m_Header.dwBaseAddr;
-        memcpy(ExeBuffer + offs, m_bzSection[v], m_SectionHeader[v].dwSizeOfRaw);
+        uint32 offs = SectionHeader[v].VirtualAddr - Header.BaseAddr;
+        memcpy(ExeBuffer + offs, Section[v], SectionHeader[v].SizeOfRaw);
     }
 
     // ******************************************************************
     // * patch digital signature with PE stub
     // ******************************************************************
-    MicroExeHeaders ExeHeaders;
+    MICRO_EXE_HEADERS ExeHeaders;
 
-    ExeHeaders.m_DOSHeader.wMagic = *(uint16 *)"MZ";
-    ExeHeaders.m_DOSHeader.Unused = 0;
+    ExeHeaders.DosHeader.Magic = *(uint16 *)"MZ";
+    ExeHeaders.DosHeader.Unused = 0;
 
-    ExeHeaders.m_Header.dwMagic = *(uint32 *)"PE\0\0";
-    ExeHeaders.m_Header.wMachine = IMAGE_FILE_MACHINE_I386;
-    ExeHeaders.m_Header.wNumberOfSections = 1;
-    ExeHeaders.m_Header.dwTimeDateStamp = m_Header.dwTimeDate;
-    ExeHeaders.m_Header.dwPointerToSymbolTable = 0;
-    ExeHeaders.m_Header.dwNumberOfSymbols = 0;
-    ExeHeaders.m_Header.wSizeOfOptionalHeader = sizeof(MicroExeHeaders::OptionalHeader);
-    ExeHeaders.m_Header.wCharacteristics = 0x0103;
+    ExeHeaders.Header.Magic = *(uint32 *)"PE\0\0";
+    ExeHeaders.Header.Machine = IMAGE_FILE_MACHINE_I386;
+    ExeHeaders.Header.NumberOfSections = 1;
+    ExeHeaders.Header.TimeDateStamp = Header.TimeDate;
+    ExeHeaders.Header.PointerToSymbolTable = 0;
+    ExeHeaders.Header.NumberOfSymbols = 0;
+    ExeHeaders.Header.SizeOfOptionalHeader = sizeof(MICRO_EXE_HEADERS::OPTIONAL_HEADER);
+    ExeHeaders.Header.Characteristics = 0x0103;
 
-    ExeHeaders.m_OptionalHeader.wMagic = 0x010B;
-    ExeHeaders.m_OptionalHeader.bMajorLinkerVersion = 0x06;
-    ExeHeaders.m_OptionalHeader.bMinorLinkerVersion = 0x00;
-    ExeHeaders.m_OptionalHeader.dwSizeOfCode = 0;
-    ExeHeaders.m_OptionalHeader.dwSizeOfInitializedData = 0;
-    ExeHeaders.m_OptionalHeader.dwSizeOfUninitializedData = 0;
-    ExeHeaders.m_OptionalHeader.dwAddressOfEntryPoint = (uint32)&ExeHeaders.m_Trampoline - (uint32)&ExeHeaders;
-    ExeHeaders.m_OptionalHeader.dwBaseOfCode = 0;
-    ExeHeaders.m_OptionalHeader.dwBaseOfData = 0;
+    ExeHeaders.OptionalHeader.Magic = 0x010B;
+    ExeHeaders.OptionalHeader.MajorLinkerVersion = 0x06;
+    ExeHeaders.OptionalHeader.MinorLinkerVersion = 0x00;
+    ExeHeaders.OptionalHeader.SizeOfCode = 0;
+    ExeHeaders.OptionalHeader.SizeOfInitializedData = 0;
+    ExeHeaders.OptionalHeader.SizeOfUninitializedData = 0;
+    ExeHeaders.OptionalHeader.AddressOfEntryPoint = (uint32)&ExeHeaders.Trampoline - (uint32)&ExeHeaders;
+    ExeHeaders.OptionalHeader.BaseOfCode = 0;
+    ExeHeaders.OptionalHeader.BaseOfData = 0;
 
-    ExeHeaders.m_OptionalHeader.dwImageBase = m_Header.dwBaseAddr;
-    ExeHeaders.m_OptionalHeader.dwLfanew_SectionAlignment = EXE_ALIGNMENT;
-    ExeHeaders.m_OptionalHeader.dwFileAlignment = EXE_ALIGNMENT;
-    ExeHeaders.m_OptionalHeader.wMajorOperatingSystemVersion = 4;
-    ExeHeaders.m_OptionalHeader.wMinorOperatingSystemVersion = 0;
-    ExeHeaders.m_OptionalHeader.wMajorImageVersion = 0;
-    ExeHeaders.m_OptionalHeader.wMinorImageVersion = 0;
-    ExeHeaders.m_OptionalHeader.wMajorSubsystemVersion = 4;
-    ExeHeaders.m_OptionalHeader.wMinorSubsystemVersion = 0;
-    ExeHeaders.m_OptionalHeader.dwWin32VersionValue = 0;
-    ExeHeaders.m_OptionalHeader.dwSizeOfImage = m_Header.dwSizeOfImage; // already aligned at 0x20
-    ExeHeaders.m_OptionalHeader.dwSizeOfHeaders = RoundUp(sizeof(MicroExeHeaders), EXE_ALIGNMENT);
-    ExeHeaders.m_OptionalHeader.dwCheckSum = 0;
-    ExeHeaders.m_OptionalHeader.wSubsystem = IMAGE_SUBSYSTEM_WINDOWS_GUI;
-    ExeHeaders.m_OptionalHeader.wDllCharacteristics = 0x400;
-    ExeHeaders.m_OptionalHeader.dwSizeOfStackReserve = 0x100000;
-    ExeHeaders.m_OptionalHeader.dwSizeOfStackCommit = 0x1000;
-    ExeHeaders.m_OptionalHeader.dwSizeOfHeapReserve = 0x100000;
-    ExeHeaders.m_OptionalHeader.dwSizeOfHeapCommit = 0x1000;
-    ExeHeaders.m_OptionalHeader.dwLoaderFlags = 0;
-    ExeHeaders.m_OptionalHeader.dwNumberOfRvaAndSizes = 4;
+    ExeHeaders.OptionalHeader.ImageBase = Header.BaseAddr;
+    ExeHeaders.OptionalHeader.Lfanew_SectionAlignment = EXE_ALIGNMENT;
+    ExeHeaders.OptionalHeader.FileAlignment = EXE_ALIGNMENT;
+    ExeHeaders.OptionalHeader.MajorOperatingSystemVersion = 4;
+    ExeHeaders.OptionalHeader.MinorOperatingSystemVersion = 0;
+    // This is where the imported DLL name "DbE\0" will be located
+    strncpy(ExeHeaders.OptionalHeader.DirtboxDllName, "DbE", 4);
+    ExeHeaders.OptionalHeader.MajorSubsystemVersion = 4;
+    ExeHeaders.OptionalHeader.MinorSubsystemVersion = 0;
+    ExeHeaders.OptionalHeader.Win32VersionValue = 0;
+    ExeHeaders.OptionalHeader.SizeOfImage = Header.SizeOfImage; // already aligned at 0x20
+    ExeHeaders.OptionalHeader.SizeOfHeaders = RoundUp(sizeof(MICRO_EXE_HEADERS), EXE_ALIGNMENT);
+    ExeHeaders.OptionalHeader.CheckSum = 0;
+    ExeHeaders.OptionalHeader.Subsystem = IMAGE_SUBSYSTEM_WINDOWS_GUI;
+    ExeHeaders.OptionalHeader.DllCharacteristics = 0x400;
+    ExeHeaders.OptionalHeader.SizeOfStackReserve = 0x100000;
+    ExeHeaders.OptionalHeader.SizeOfStackCommit = 0x1000;
+    ExeHeaders.OptionalHeader.SizeOfHeapReserve = 0x100000;
+    ExeHeaders.OptionalHeader.SizeOfHeapCommit = 0x1000;
+    ExeHeaders.OptionalHeader.LoaderFlags = 0;
+    ExeHeaders.OptionalHeader.NumberOfRvaAndSizes = 4;
 
     // ******************************************************************
     // * the other directories
     // ******************************************************************
-    for (uint32 v=0; v<4; v++)
+    for (uint32 v = 0; v < 4; v++)
     {
-        ExeHeaders.m_OptionalHeader.astDataDirectory[v].dwVirtualAddress = 0;
-        ExeHeaders.m_OptionalHeader.astDataDirectory[v].dwSize = 0;
+        ExeHeaders.OptionalHeader.DataDirectory[v].VirtualAddress = 0;
+        ExeHeaders.OptionalHeader.DataDirectory[v].Size = 0;
     }
 
     // ******************************************************************
     // * import directory
     // ******************************************************************
-    uint32 offs = (uint32)&ExeHeaders.m_ImageImportDescriptor - (uint32)&ExeHeaders;
+    uint32 offs = (uint32)&ExeHeaders.ImageImportDescriptor - (uint32)&ExeHeaders;
 
-    ExeHeaders.m_OptionalHeader.astDataDirectory[1].dwVirtualAddress = offs;
-    ExeHeaders.m_OptionalHeader.astDataDirectory[1].dwSize = 2*sizeof(MicroExeHeaders::ImageImportDescriptor);
+    ExeHeaders.OptionalHeader.DataDirectory[1].VirtualAddress = offs;
+    ExeHeaders.OptionalHeader.DataDirectory[1].Size = 
+        2*sizeof(MICRO_EXE_HEADERS::IMAGE_IMPORT_DESCRIPTOR);
 
     // ******************************************************************
     // * the one and only section header
     // ******************************************************************
     uint32 XbeSectionAddress = 0; // the whole image
-    uint32 XbeSectionSize = m_Header.dwSizeOfImage - XbeSectionAddress; // already aligned at 0x20
+    uint32 XbeSectionSize = Header.SizeOfImage - XbeSectionAddress; // already aligned at 0x20
 
-    strncpy((char *)ExeHeaders.m_SectionHeader.szName, "loldongs", 8);
-    ExeHeaders.m_SectionHeader.dwVirtualSize = XbeSectionSize;
-    ExeHeaders.m_SectionHeader.dwVirtualAddress = XbeSectionAddress;
-    ExeHeaders.m_SectionHeader.dwSizeOfRawData = XbeSectionSize;
-    ExeHeaders.m_SectionHeader.dwPointerToRawData = XbeSectionAddress;
-    ExeHeaders.m_SectionHeader.dwPointerToRelocations = 0;
-    ExeHeaders.m_SectionHeader.dwPointerToLinenumbers = 0;
-    ExeHeaders.m_SectionHeader.wNumberOfRelocations = 0;
-    ExeHeaders.m_SectionHeader.wNumberOfLinenumbers = 0;
-    ExeHeaders.m_SectionHeader.dwCharacteristics = 0x60000020;
+    strncpy(ExeHeaders.SectionHeader.Name, "loldong", 8);
+    ExeHeaders.SectionHeader.VirtualSize = XbeSectionSize;
+    ExeHeaders.SectionHeader.VirtualAddress = XbeSectionAddress;
+    ExeHeaders.SectionHeader.SizeOfRawData = XbeSectionSize;
+    ExeHeaders.SectionHeader.PointerToRawData = XbeSectionAddress;
+    ExeHeaders.SectionHeader.PointerToRelocations = 0;
+    ExeHeaders.SectionHeader.PointerToLinenumbers = 0;
+    ExeHeaders.SectionHeader.NumberOfRelocations = 0;
+    ExeHeaders.SectionHeader.NumberOfLinenumbers = 0;
+    ExeHeaders.SectionHeader.Characteristics = 0x60000020;
 
     // ******************************************************************
     // * image import descriptor, only one DLL
     // ******************************************************************
-    uint32 offsIat = (uint32)&ExeHeaders.m_ImportAddressTable - (uint32)&ExeHeaders;
-    uint32 offsName = (uint32)&ExeHeaders.m_ImportName - (uint32)&ExeHeaders;
+    uint32 offsIat = (uint32)&ExeHeaders.ImportAddressTable - (uint32)&ExeHeaders;
+    uint32 offsName = (uint32)ExeHeaders.OptionalHeader.DirtboxDllName - (uint32)&ExeHeaders;
 
-    ExeHeaders.m_ImageImportDescriptor[0].dwOriginalFirstThunk = offsIat;
-    ExeHeaders.m_ImageImportDescriptor[0].dwTimeDateStamp = 0;
-    ExeHeaders.m_ImageImportDescriptor[0].dwForwarderChain = 0;
-    ExeHeaders.m_ImageImportDescriptor[0].dwName = offsName;
-    ExeHeaders.m_ImageImportDescriptor[0].dwFirstThunk = offsIat;
+    ExeHeaders.ImageImportDescriptor[0].OriginalFirstThunk = offsIat;
+    ExeHeaders.ImageImportDescriptor[0].TimeDateStamp = 0;
+    ExeHeaders.ImageImportDescriptor[0].ForwarderChain = 0;
+    ExeHeaders.ImageImportDescriptor[0].Name = offsName;
+    ExeHeaders.ImageImportDescriptor[0].FirstThunk = offsIat;
 
-    ExeHeaders.m_ImageImportDescriptor[1].dwOriginalFirstThunk = 0;
-    ExeHeaders.m_ImageImportDescriptor[1].dwTimeDateStamp = 0;
-    ExeHeaders.m_ImageImportDescriptor[1].dwForwarderChain = 0;
-    ExeHeaders.m_ImageImportDescriptor[1].dwName = 0;
-    ExeHeaders.m_ImageImportDescriptor[1].dwFirstThunk = 0;
+    ExeHeaders.ImageImportDescriptor[1].OriginalFirstThunk = 0;
+    ExeHeaders.ImageImportDescriptor[1].TimeDateStamp = 0;
+    ExeHeaders.ImageImportDescriptor[1].ForwarderChain = 0;
+    ExeHeaders.ImageImportDescriptor[1].Name = 0;
+    ExeHeaders.ImageImportDescriptor[1].FirstThunk = 0;
 
     // ******************************************************************
     // * import address table, import by ordinal
     // ******************************************************************
-    ExeHeaders.m_ImportAddressTable[0] = 0x80000001;
-    ExeHeaders.m_ImportAddressTable[1] = 0;
-
-    // ******************************************************************
-    // * imported DLL name
-    // ******************************************************************
-    strncpy(ExeHeaders.m_ImportName, "DirtboxKe", 10);
+    ExeHeaders.ImportAddressTable[0] = 0x80000001;
+    ExeHeaders.ImportAddressTable[1] = 0;
 
     // ******************************************************************
     // * trampoline that calls the Dirtbox loader in the DLL
     // ******************************************************************
-    ExeHeaders.m_Trampoline[0] = 0xFF; // JMP near absolute indirect
-    ExeHeaders.m_Trampoline[1] = 0x25; // memory
-    *(uint32 *)&ExeHeaders.m_Trampoline[2] = 0x000100EC;
+    memcpy(ExeHeaders.Trampoline, &TrampolineCode, TRAMPOLINE_LENGTH);
 
     // ******************************************************************
     // * replaces the magic and digital signature with PE headers
     // ******************************************************************
-    memcpy(ExeBuffer + 0, &ExeHeaders, sizeof(MicroExeHeaders));
+    memcpy(ExeBuffer + 0, &ExeHeaders, sizeof(MICRO_EXE_HEADERS));
 
     // ******************************************************************
     // * write the created buffer into EXE file
     // ******************************************************************
-    FILE *ExeFile = fopen(x_szFilename, "wb");
+    FILE *ExeFile = fopen(Filename, "wb");
     if (ExeFile == 0)
         XBE_WRITE_ERROR("Could not open Exe file");
 
-    fwrite(ExeBuffer, m_Header.dwSizeOfImage, 1, ExeFile);
+    fwrite(ExeBuffer, Header.SizeOfImage, 1, ExeFile);
     fclose(ExeFile);
 
     // ******************************************************************
@@ -510,33 +589,33 @@ int32 Xbe::WriteExe(const char *x_szFilename)
 // ******************************************************************
 // * GetAddr
 // ******************************************************************
-uint08 *Xbe::GetAddr(uint32 x_dwVirtualAddress)
+uint08 *Xbe::GetAddr(uint32 VirtualAddress)
 {
-    uint32 offs = x_dwVirtualAddress - m_Header.dwBaseAddr;
+    uint32 offs = VirtualAddress - Header.BaseAddr;
 
     // ******************************************************************
     // * offset in image header
     // ******************************************************************
-    if(offs < sizeof(m_Header))
-        return &((uint08*)&m_Header)[offs];
+    if(offs < sizeof(Header))
+        return &((uint08*)&Header)[offs];
 
     // ******************************************************************
     // * offset in image header extra bytes
     // ******************************************************************
-    if(offs < m_Header.dwSizeOfHeaders)
- 		return (uint08*)&m_HeaderEx[offs - sizeof(m_Header)];
+    if(offs < Header.SizeOfHeaders)
+ 		return (uint08*)&HeaderEx[offs - sizeof(Header)];
 
     // ******************************************************************
     // * offset in some random section
     // ******************************************************************
     {
-        for(uint32 v=0; v<m_Header.dwSections; v++)
+        for(uint32 v = 0; v < Header.Sections; v++)
         {
-            uint32 VirtAddr = m_SectionHeader[v].dwVirtualAddr;
-            uint32 VirtSize = m_SectionHeader[v].dwVirtualSize;
+            uint32 VirtAddr = SectionHeader[v].VirtualAddr;
+            uint32 VirtSize = SectionHeader[v].VirtualSize;
 
-            if( (x_dwVirtualAddress >= VirtAddr) && (x_dwVirtualAddress < (VirtAddr + VirtSize)) )
-                return &m_bzSection[v][x_dwVirtualAddress - VirtAddr];
+            if( (VirtualAddress >= VirtAddr) && (VirtualAddress < (VirtAddr + VirtSize)) )
+                return &Section[v][VirtualAddress - VirtAddr];
         }
     }
 

@@ -18,12 +18,12 @@ typedef signed char    sint08;
 typedef signed short   sint16;
 typedef signed long    sint32;
 
-inline static uint32 RoundUp(uint32 dwValue, uint32 dwMult)
+inline static uint32 RoundUp(uint32 Value, uint32 Mult)
 {
-    if(dwMult == 0)
-        return dwValue;
+    if(Mult == 0)
+        return Value;
 
-    return dwValue - (dwValue-1)%dwMult + (dwMult - 1);
+    return Value - (Value - 1)%Mult + (Mult - 1);
 }
 
 #endif

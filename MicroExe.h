@@ -4,97 +4,99 @@
 #include "Types.h"
 
 #include "AlignPrefix1.h"
-struct MicroExeHeaders
+struct MICRO_EXE_HEADERS
 {
     // DOS Header
-    struct DOSHeader
+    struct DOS_HEADER
     {
-        uint16 wMagic;                         // DOS .EXE magic number
+        uint16 Magic;                       // DOS .EXE magic number
         uint16 Unused;
-    } m_DOSHeader;
+    } DosHeader;
 
     // PE Header
-    struct Header
+    struct HEADER
     {
-        uint32 dwMagic;                      // magic number [should be "PE\0\0"]
-        uint16 wMachine;                     // machine type
-        uint16 wNumberOfSections;            // number of sections
-        uint32 dwTimeDateStamp;              // timedate stamp
-        uint32 dwPointerToSymbolTable;       // symbol table address
-        uint32 dwNumberOfSymbols;            // number of symbols
-        uint16 wSizeOfOptionalHeader;        // size of optional header
-        uint16 wCharacteristics;             // characteristics
-    } m_Header;
+        uint32 Magic;                       // magic number [should be "PE\0\0"]
+        uint16 Machine;                     // machine type
+        uint16 NumberOfSections;            // number of sections
+        uint32 TimeDateStamp;               // timedate stamp
+        uint32 PointerToSymbolTable;        // symbol table address
+        uint32 NumberOfSymbols;             // number of symbols
+        uint16 SizeOfOptionalHeader;        // size of optional header
+        uint16 Characteristics;             // characteristics
+    } Header;
 
     // Optional Header
-    struct OptionalHeader
+    struct OPTIONAL_HEADER
     {
-        uint16 wMagic;                       // magic number [should be 0x010B]
-        uint08 bMajorLinkerVersion;          // linker version [major]
-        uint08 bMinorLinkerVersion;          // linker version [minor]
-        uint32 dwSizeOfCode;                 // size of code
-        uint32 dwSizeOfInitializedData;      // size of initialized data
-        uint32 dwSizeOfUninitializedData;    // size of uninitialized data
-        uint32 dwAddressOfEntryPoint;        // address of entry point
-        uint32 dwBaseOfCode;                 // address of code base
-        uint32 dwBaseOfData;                 // address of data base
+        uint16 Magic;                       // magic number [should be 0x010B]
+        uint08 MajorLinkerVersion;          // linker version [major]
+        uint08 MinorLinkerVersion;          // linker version [minor]
+        uint32 SizeOfCode;                  // size of code
+        uint32 SizeOfInitializedData;       // size of initialized data
+        uint32 SizeOfUninitializedData;     // size of uninitialized data
+        uint32 AddressOfEntryPoint;         // address of entry point
+        uint32 BaseOfCode;                  // address of code base
+        uint32 BaseOfData;                  // address of data base
 
         // NT Additional Fields
-        uint32 dwImageBase;                  // address of image base
-        uint32 dwLfanew_SectionAlignment;    // section alignment
-                                             // (DOS Header) file address of new .EXE header
-        uint32 dwFileAlignment;              // file alignment
-        uint16 wMajorOperatingSystemVersion; // operating system version [major]
-        uint16 wMinorOperatingSystemVersion; // operating system version [minor]
-        uint16 wMajorImageVersion;           // image version [major]
-        uint16 wMinorImageVersion;           // image version [minor]
-        uint16 wMajorSubsystemVersion;       // subsystem version [major]
-        uint16 wMinorSubsystemVersion;       // subsystem version [minor]
-        uint32 dwWin32VersionValue;          // win32 version
-        uint32 dwSizeOfImage;                // size of image
-        uint32 dwSizeOfHeaders;              // size of headers
-        uint32 dwCheckSum;                   // checksum
-        uint16 wSubsystem;                   // subsystem
-        uint16 wDllCharacteristics;          // dll characteristics
-        uint32 dwSizeOfStackReserve;         // size of stack reserve
-        uint32 dwSizeOfStackCommit;          // size of stack commit
-        uint32 dwSizeOfHeapReserve;          // size of heap reserve
-        uint32 dwSizeOfHeapCommit;           // size of heap commit
-        uint32 dwLoaderFlags;                // loader flags
-        uint32 dwNumberOfRvaAndSizes;        // data directories
-        struct ImageDataDirectory
+        uint32 ImageBase;                   // address of image base
+        uint32 Lfanew_SectionAlignment;     // section alignment
+                                            // (DOS Header) file address of new .EXE header
+        uint32 FileAlignment;               // file alignment
+        uint16 MajorOperatingSystemVersion; // operating system version [major]
+        uint16 MinorOperatingSystemVersion; // operating system version [minor]
+        // image version not normally used, thus the imported
+        // Dirtbox DLL name is placed here to save a few bytes.
+        int08 DirtboxDllName[4];
+        // uint16 MajorImageVersion;        // image version [major]
+        // uint16 MinorImageVersion;        // image version [minor]
+        uint16 MajorSubsystemVersion;       // subsystem version [major]
+        uint16 MinorSubsystemVersion;       // subsystem version [minor]
+        uint32 Win32VersionValue;           // win32 version
+        uint32 SizeOfImage;                 // size of image
+        uint32 SizeOfHeaders;               // size of headers
+        uint32 CheckSum;                    // checksum
+        uint16 Subsystem;                   // subsystem
+        uint16 DllCharacteristics;          // dll characteristics
+        uint32 SizeOfStackReserve;          // size of stack reserve
+        uint32 SizeOfStackCommit;           // size of stack commit
+        uint32 SizeOfHeapReserve;           // size of heap reserve
+        uint32 SizeOfHeapCommit;            // size of heap commit
+        uint32 LoaderFlags;                 // loader flags
+        uint32 NumberOfRvaAndSizes;         // data directories
+        struct IMAGE_DATA_DIRECTORY
         {
-            uint32 dwVirtualAddress;
-            uint32 dwSize;
-        } astDataDirectory[4];
-    } m_OptionalHeader;
+            uint32 VirtualAddress;
+            uint32 Size;
+        } DataDirectory[4];
+    } OptionalHeader;
 
-    struct SectionHeader
+    struct SECTION_HEADER
     {
-        uint08 szName[8];
-        uint32 dwVirtualSize;
-        uint32 dwVirtualAddress;
-        uint32 dwSizeOfRawData;
-        uint32 dwPointerToRawData;
-        uint32 dwPointerToRelocations;
-        uint32 dwPointerToLinenumbers;
-        uint16 wNumberOfRelocations;
-        uint16 wNumberOfLinenumbers;
-        uint32 dwCharacteristics;
-    } m_SectionHeader;
+        int08  Name[8];
+        uint32 VirtualSize;
+        uint32 VirtualAddress;
+        uint32 SizeOfRawData;
+        uint32 PointerToRawData;
+        uint32 PointerToRelocations;
+        uint32 PointerToLinenumbers;
+        uint16 NumberOfRelocations;
+        uint16 NumberOfLinenumbers;
+        uint32 Characteristics;
+    } SectionHeader;
 
-    struct ImageImportDescriptor
+    struct IMAGE_IMPORT_DESCRIPTOR
     {
-        uint32 dwOriginalFirstThunk; // address of import lookup table
-        uint32 dwTimeDateStamp;      // time date stamp
-        uint32 dwForwarderChain;     // forwarder chain, -1 if no forwarders
-        uint32 dwName;               // address of DLL name string
-        uint32 dwFirstThunk;         // address of import address table
-    } m_ImageImportDescriptor[2];
+        uint32 OriginalFirstThunk; // address of import lookup table
+        uint32 TimeDateStamp;      // time date stamp
+        uint32 ForwarderChain;     // forwarder chain, -1 if no forwarders
+        uint32 Name;               // address of DLL name string
+        uint32 FirstThunk;         // address of import address table
+    } ImageImportDescriptor[2];
 
-    uint32 m_ImportAddressTable[2];
-    char m_ImportName[10];
-    uint08 m_Trampoline[6];
+    uint32 ImportAddressTable[2];
+    uint08 Trampoline[16];
 };
 #include "AlignPosfix1.h"
 
