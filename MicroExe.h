@@ -101,12 +101,17 @@ struct MICRO_EXE_HEADERS
 #include "AlignPosfix1.h"
 
 
-const uint16 IMAGE_FILE_MACHINE_I386             = 0x014c;  // Intel 386.
+const uint16 IMAGE_FILE_RELOCS_STRIPPED      = 0x0001; // Relocation info stripped from file.
+const uint16 IMAGE_FILE_EXECUTABLE_IMAGE     = 0x0002; // File is executable  (i.e. no unresolved externel references).
+const uint16 IMAGE_FILE_LARGE_ADDRESS_AWARE  = 0x0020; // App can handle >2gb addresses
+const uint16 IMAGE_FILE_32BIT_MACHINE        = 0x0100; // 32 bit word machine.
 
-const uint16 IMAGE_SUBSYSTEM_UNKNOWN             = 0;
-const uint16 IMAGE_SUBSYSTEM_NATIVE              = 1;
-const uint16 IMAGE_SUBSYSTEM_WINDOWS_GUI         = 2;
-const uint16 IMAGE_SUBSYSTEM_WINDOWS_CUI         = 3;
+const uint16 IMAGE_FILE_MACHINE_I386         = 0x014c; // Intel 386.
+
+const uint16 IMAGE_SUBSYSTEM_UNKNOWN         = 0x0000;
+const uint16 IMAGE_SUBSYSTEM_NATIVE          = 0x0001;
+const uint16 IMAGE_SUBSYSTEM_WINDOWS_GUI     = 0x0002;
+const uint16 IMAGE_SUBSYSTEM_WINDOWS_CUI     = 0x0003;
 
 const uint32 EXE_ALIGNMENT = 4;
 

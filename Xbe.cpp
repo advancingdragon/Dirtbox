@@ -97,7 +97,9 @@ static void __declspec(naked) TrampolineCode()
     {
         mov edx, 0x000100EC
         call dword ptr [edx]
-        ret 0x10
+        ret 
+        nop
+        nop
     }
 }
 
@@ -380,6 +382,11 @@ Xbe::~Xbe()
 // ******************************************************************
 int32 Xbe::PatchXbe()
 {
+    printf("Xbe::PatchExe Patching initialization flags in Xbe...");
+    Header.InitFlags.MountUtilityDrive = 0;
+    Header.InitFlags.FormatUtilityDrive = 0;
+    printf("OK\n");
+
     printf("Xbe::PatchExe Patching MapRegisters in Xbe...");
 
     // ******************************************************************
@@ -463,7 +470,9 @@ int32 Xbe::WriteExe(const char *Filename)
     ExeHeaders.Header.PointerToSymbolTable = 0;
     ExeHeaders.Header.NumberOfSymbols = 0;
     ExeHeaders.Header.SizeOfOptionalHeader = sizeof(MICRO_EXE_HEADERS::OPTIONAL_HEADER);
-    ExeHeaders.Header.Characteristics = 0x0103;
+    ExeHeaders.Header.Characteristics = 
+        IMAGE_FILE_RELOCS_STRIPPED | IMAGE_FILE_EXECUTABLE_IMAGE | 
+        IMAGE_FILE_LARGE_ADDRESS_AWARE | IMAGE_FILE_32BIT_MACHINE;
 
     ExeHeaders.OptionalHeader.Magic = 0x010B;
     ExeHeaders.OptionalHeader.MajorLinkerVersion = 0x06;
@@ -488,7 +497,7 @@ int32 Xbe::WriteExe(const char *Filename)
     ExeHeaders.OptionalHeader.SizeOfImage = Header.SizeOfImage; // already aligned at 0x20
     ExeHeaders.OptionalHeader.SizeOfHeaders = RoundUp(sizeof(MICRO_EXE_HEADERS), EXE_ALIGNMENT);
     ExeHeaders.OptionalHeader.CheckSum = 0;
-    ExeHeaders.OptionalHeader.Subsystem = IMAGE_SUBSYSTEM_WINDOWS_GUI;
+    ExeHeaders.OptionalHeader.Subsystem = IMAGE_SUBSYSTEM_WINDOWS_CUI;
     ExeHeaders.OptionalHeader.DllCharacteristics = 0x400;
     ExeHeaders.OptionalHeader.SizeOfStackReserve = 0x100000;
     ExeHeaders.OptionalHeader.SizeOfStackCommit = 0x1000;

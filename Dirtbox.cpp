@@ -9,8 +9,13 @@
 
 int main(int argc, char *argv[])
 {
-    Xbe XbeFile("C:\\Projects\\Xbox\\XGraphicsTest\\Release\\XGraphicsTest.xbe");
-    XbeFile.WriteExe("C:\\Projects\\Xbox\\DirtboxKernel\\Debug\\xbe.exe");
+    if (argc < 3)
+    {
+        printf("Usage: Dirtbox input output\n");
+        return 1;
+    }
+    Xbe XbeFile(argv[1]);
+    XbeFile.WriteExe(argv[2]);
     return 0;
 }
 
